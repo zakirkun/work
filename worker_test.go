@@ -366,19 +366,82 @@ func TestWorkersPaused(t *testing.T) {
 
 // Test that in the case of an unavailable Redis server,
 // the worker loop exits in the case of a WorkerPool.Stop
-func TestStop(t *testing.T) {
+func TestStopWithUnavailableRedis(t *testing.T) {
 	redisPool := &redis.Pool{
 		Dial: func() (redis.Conn, error) {
-			c, err := redis.Dial("tcp", "notworking:6379", redis.DialConnectTimeout(1*time.Second))
-			if err != nil {
-				return nil, err
-			}
-			return c, nil
+			return redis.Dial("tcp", "notworking:6379", redis.DialConnectTimeout(1*time.Second))
 		},
 	}
 	wp := NewWorkerPool(TestContext{}, 10, "work", redisPool)
 	wp.Start()
 	wp.Stop()
+}
+
+func TestStop(t *testing.T) {
+	redisPool := newTestPool(t)
+
+	namespace := "work"
+	wp := NewWorkerPool(TestContext{}, 10, namespace, redisPool)
+	wp.Start()
+	wp.Stop()
+
+	// verify cleanup of heartbeat
+	conn := redisPool.Get()
+	ok, err := redis.Bool(conn.Do("SISMEMBER", redisKeyWorkerPools(namespace), wp.workerPoolID))
+	assert.Nil(t, err)
+	assert.False(t, ok)
+
+	ok, err = redis.Bool(conn.Do("EXISTS", redisKeyHeartbeat(namespace, wp.workerPoolID)))
+	assert.Nil(t, err)
+	assert.False(t, ok)
+}
+
+func TestStopCleanup(t *testing.T) {
+	redisPool := newTestPool(t)
+
+	namespace := "work"
+	jobType := "dummyJob"
+	jobData := `{"name":"dummyJob","id":"40a2206be652914611c777f4","t":1614838373,"args":{"key":0}}`
+
+	wp := NewWorkerPool(TestContext{}, 10, namespace, redisPool)
+	wp.JobWithOptions(jobType, JobOptions{MaxConcurrency: 10}, func(job *Job) error {
+		return nil
+	})
+	wp.Start()
+
+	// We are trying to simulate a scenario where there is loss of data which
+	// can happen when there is a failover on a Sentinel cluster. In such a
+	// situation, there will be jobs which will appear to be in progress from
+	// the perspective of redis but won't actually be getting executed in
+	// workers. The following redis commands are equivalent to a job in
+	// progress.
+	conn := redisPool.Get()
+	err := conn.Send("LPUSH", redisKeyJobsInProgress(namespace, wp.workerPoolID, jobType), jobData)
+	assert.NoError(t, err)
+	err = conn.Send("SET", redisKeyJobsLock(namespace, jobType), 1)
+	assert.NoError(t, err)
+	err = conn.Send("HSET", redisKeyJobsLockInfo(namespace, jobType), wp.workerPoolID, 1)
+	assert.NoError(t, err)
+	err = conn.Flush()
+	assert.NoError(t, err)
+
+	wp.Stop()
+
+	jobsInProgress, err := redis.Strings(conn.Do("LRANGE", redisKeyJobsInProgress(namespace, wp.workerPoolID, jobType), 0, -1))
+	assert.NoError(t, err)
+	assert.Empty(t, jobsInProgress)
+
+	lockCount, err := redis.Int(conn.Do("GET", redisKeyJobsLock(namespace, jobType)))
+	assert.NoError(t, err)
+	assert.Equal(t, 0, lockCount)
+
+	ok, err := redis.Bool(conn.Do("HEXISTS", redisKeyJobsLockInfo(namespace, jobType), wp.workerPoolID))
+	assert.NoError(t, err)
+	assert.False(t, ok)
+
+	jobQueue, err := redis.Strings(conn.Do("LRANGE", redisKeyJobs(namespace, jobType), 0, -1))
+	assert.NoError(t, err)
+	assert.Equal(t, []string{jobData}, jobQueue)
 }
 
 func BenchmarkJobProcessing(b *testing.B) {
@@ -486,6 +549,17 @@ func hgetInt64(pool *redis.Pool, redisKey, hashKey string) int64 {
 		panic("could not HGET int64: " + err.Error())
 	}
 	return v
+}
+
+func hexists(pool *redis.Pool, redisKey, hashKey string) bool {
+	conn := pool.Get()
+	defer conn.Close()
+
+	ok, err := redis.Bool(conn.Do("HEXISTS", redisKey, hashKey))
+	if err != nil {
+		panic("could not HEXISTS: " + err.Error())
+	}
+	return ok
 }
 
 func jobOnZset(pool *redis.Pool, key string) (int64, *Job) {

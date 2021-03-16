@@ -23,7 +23,7 @@ All NPM commands can be found in `package.json`.
 To embed bundled js, do
 
 ```
-go get -u github.com/jteeuwen/go-bindata/...
+go get -u github.com/go-bindata/go-bindata/...
 cd webui/internal/assets
 go generate
 ```

@@ -42,7 +42,7 @@ being defined for jobs.
 queue. It is possible that the job was actually processed successfully by the worker, but the change for removing from 
 in-progress queue was lost.
 
-#### Expose lock count & max concurrency for each job (#2)
+#### Expose lock count & max concurrency for each job (#2, #17)
 
 Added to the queue info accessible from 
 [`work.Client.Queues()`](https://pkg.go.dev/github.com/gojek/work#Client.Queues). Useful for alerting when lock count is consistently equal to the max 
@@ -50,6 +50,8 @@ concurrency possibly indicating that stale lock count is resulting in jobs not b
 
 For the cleanup to be thorough, [`work.(*WorkerPool).Stop`](https://pkg.go.dev/github.com/gojek/work#WorkerPool.Stop) 
 would need to be called on each worker pool instance.
+
+The same info is also displayed on the queues page in WebUI (#17).
 
 #### Worker pool started check (#15)
 

@@ -25,11 +25,11 @@ The module is backward compatible with github.com/gocraft/work. To switch to thi
 go get github.com/gojek/work
 ```
 
-#### Refresh Node.js dependencies for WebUI (`99f237a`). 
+#### Refresh Node.js dependencies for WebUI ([`99f237a`][commit-99f237a]). 
 
 This fixes multiple security vulnerabilities.
 
-#### Requeue in progress jobs and clean stale lock info on stop (#1). 
+#### Requeue in progress jobs and clean stale lock info on stop ([#1][pull-1]). 
 
 In case there is a failover with a Redis Sentinel cluster with data loss, there can be stale lock information which can 
 cause job processing to be stuck if the max concurrency limit is reached. Therefore, the jobs which were in progress are
@@ -42,7 +42,7 @@ being defined for jobs.
 queue. It is possible that the job was actually processed successfully by the worker, but the change for removing from 
 in-progress queue was lost.
 
-#### Expose lock count & max concurrency for each job (#2, #17)
+#### Expose lock count & max concurrency for each job ([#2][pull-2], [#17][pull-17])
 
 Added to the queue info accessible from 
 [`work.Client.Queues()`](https://pkg.go.dev/github.com/gojek/work#Client.Queues). Useful for alerting when lock count is consistently equal to the max 
@@ -51,9 +51,9 @@ concurrency possibly indicating that stale lock count is resulting in jobs not b
 For the cleanup to be thorough, [`work.(*WorkerPool).Stop`](https://pkg.go.dev/github.com/gojek/work#WorkerPool.Stop) 
 would need to be called on each worker pool instance.
 
-The same info is also displayed on the queues page in WebUI (#17).
+The same info is also displayed on the queues page in WebUI ([#17][pull-17]).
 
-#### Worker pool started check (#15)
+#### Worker pool started check ([#15][pull-15])
 
 Expose [`work.(*WorkerPool).Started`](https://pkg.go.dev/github.com/gojek/work#WorkerPool.Started) which can be used to check if the worker pool has been
 started and is running.
@@ -428,3 +428,8 @@ These packages were developed by the [engineering team](https://eng.uservoice.co
 [pkg-go-dev-xgo]: https://pkg.go.dev/mod/github.com/gojek/work?tab=packages
 [github-workflow-badge]: https://github.com/gojek/work/workflows/build/badge.svg
 [github-workflow]: https://github.com/gojek/work/actions?query=workflow%3Abuild
+[commit-99f237a]: https://github.com/gojek/work/commit/99f237a
+[pull-1]: https://github.com/gojek/work/pull/1
+[pull-2]: https://github.com/gojek/work/pull/2
+[pull-15]: https://github.com/gojek/work/pull/15
+[pull-17]: https://github.com/gojek/work/pull/17
